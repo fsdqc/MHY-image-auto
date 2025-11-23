@@ -9,20 +9,24 @@
         <div class="inline-drawer-content">
             <div class="flex-container">
                 <div id="get_text" class="menu_button menu_button_icon interactable"
-                    data-i18n="[title]get_text" 
-                    title="获取正文" tabindex="0" role="button">
+                    data-i18n="[title]get_text" title="获取正文" tabindex="0" role="button">
                     获取正文
                 </div>
-                <div id="reset_defaults" class="menu_button menu_button_icon interactable" data-i18n="[title]get_text" title="获取正文"
+                <div id="update_text" class="menu_button menu_button_icon interactable"
+                    data-i18n="[title]update_text" title="更新" tabindex="0" role="button">
+                    更新
+                </div>
+                <div id="reset_defaults" class="menu_button menu_button_icon interactable" 
+                    data-i18n="[title]reset_defaults" title="恢复默认"
                     tabindex="0" role="button">
                     恢复默认
                 </div>
-                <div id="generate_image" class="menu_button menu_button_icon interactable" data-i18n="[title]get_text" title="获取正文" tabindex="0"
-                    role="button">
+                <div id="generate_image" class="menu_button menu_button_icon interactable" 
+                    data-i18n="[title]generate_image" title="生成图片" tabindex="0" role="button">
                     生成图片
                 </div>
-                <div id="debug" class="menu_button menu_button_icon interactable" data-i18n="[title]get_text" title="获取正文"
-                    tabindex="0" role="button">
+                <div id="debug" class="menu_button menu_button_icon interactable" 
+                    data-i18n="[title]debug" title="调试" tabindex="0" role="button">
                     调试
                 </div>
             </div>
@@ -30,13 +34,16 @@
             <div id="regex_container" >
             </div>
             <div class="flex-container">
-                <div id="add_regex" class="menu_button menu_button_icon interactable" data-i18n="[title]get_text" title="添加正则"
-                    tabindex="0" role="button">
-                    +
-                </div>
-                <div id="delete_regex" class="menu_button menu_button_icon interactable" data-i18n="[title]get_text" title="删除正则"
-                    tabindex="0" role="button">
-                    -
+                <div style="display:flex;gap: 4px;align-items:center;width:100%;">
+                    <textarea id="regex_name" class="text_pole" placeholder="输入名称" style="flex:1;margin:0;"></textarea>
+                    <div id="add_regex" class="menu_button menu_button_icon interactable" data-i18n="[title]add_regex" title="添加正则"
+                        tabindex="0" role="button" style="flex:0 0 auto;padding:6px 10px;">
+                        +
+                    </div>
+                    <div id="delete_regex" class="menu_button menu_button_icon interactable" data-i18n="[title]delete_regex" title="删除正则"
+                        tabindex="0" role="button" style="flex:0 0 auto;padding:6px 10px;">
+                        -
+                    </div>
                 </div>
             </div>
         </div>

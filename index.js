@@ -23,7 +23,7 @@ const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
 const storeVariable = {
   regexCount: 5,
   text: '',
-  regexInput: [`/<prompt>[\\s\\S]+?</prompt>/g`,`/(?<=<prompt>[\\s\\S]+prompt=")[\\s\\S]+?(?="[\\s\\S]+</prompt>)/g`],
+  regexInput: [`/<prompt>[\\s\\S]+?</prompt>/g`],
   regexText: [],
   regexName: ['replace','prompt','negativePrompt','image','lora'],
 };
@@ -61,14 +61,39 @@ function onExampleInput(event) {
 */
 // This function is called when the extension is loaded
 
-
+//函数
 //获取正文
 async function getText() {
   const context = getContext();
   const message = context.chat[context.chat.length - 1];
-  $('#text').val(message.mes,);
+  $('#text').val(message.mes);
+  storeData.text = $('#text').val();
+  saveSettingsDebounced();
+}
+//更新函数
+async function updateRegexText(i) {
+  const context = getContext();
+  if (storeData.regexInput[i]) {
+    storeData.regexText[i] = [...storeData.text.matchAll(regexFromString(storeData.regexInput[i]))];
+    $(`#regex_text_${storeData.regexName[i]}`).val(storeData.regexText[i]);
+    saveSettingsDebounced();
+  }
 }
 
+//生成图片
+async function generateImage(prompt, negativePrompt) {
+  const result = await SlashCommandParser.commands['sd'].callback({
+    quiet: 'true',
+    negative: negativePrompt
+  },
+    prompt,
+  );
+  return result;
+}
+//随机选择
+function randomItem(array) {
+  return array[Math.floor(Math.random() * array.length)];
+}
 
 //加载数据
 function loadData() {
@@ -86,10 +111,116 @@ function loadData() {
       </div>`
     );
     $('#regex_container').append(newRegexHtml);
-    $(`#regex_input_${storeData.regexName[i]}`).val(storeData.regexInput[i]);
+    //获取正文
+    $('#get_text').on('click', function () {
+      getText();
+      storeData.text = $('#text').val();
+      saveSettingsDebounced();
+    });
+    //更新
+    $('#update_text').on('click', function () {
+        updateRegexText(i);
+    });
+    // 正文处理
+    $(`#${storeData.regexName[i]}`).on('click', function () {
+        updateRegexText(i);
+      });
+    //恢复默认
+    $('#reset_defaults').on('click', function () {
+      Object.assign(extension_settings[extensionName], defaultSettings);
+      saveSettingsDebounced();
+      $('#regex_container').empty();
+      loadData();
+    });
+    init(i);
     $(`#regex_text_${storeData.regexName[i]}`).val(storeData.regexText[i]);
+    //声明macros
+    MacrosParser.registerMacro(
+      storeData.regexName[i], () => macrosData[i], "获取" + storeData.regexName[i],
+    );
   }
 }
+//触发,保存,添加初始正则
+async function init(i) {
+  //保存数据
+  $('#text').on('input', function () {
+    storeData.text = $(this).val();
+    saveSettingsDebounced();
+  });
+  $(`#regex_input_${storeData.regexName[i]}`).on('input', function () {
+    storeData.regexInput[i] = $(this).val();
+    saveSettingsDebounced();
+  });
+  $(`#regex_text_${storeData.regexName[i]}`).on('input', function () {
+    storeData.regexText[i] = $(this).val();
+    saveSettingsDebounced();
+  });
+
+  //添加初始正则
+  if (i > 0) {
+    storeData.regexInput[i] = `/(?<=<prompt>[\\s\\S]+${storeData.regexName[i]}=")[\\s\\S]+?(?="[\\s\\S]+</prompt>)/g`;
+  }
+  $(`#regex_input_${storeData.regexName[i]}`).val(storeData.regexInput[i]);
+}
+//图片处理
+async function processImages() {
+  for (let i = 0; i < storeData.regexCount; i++) {
+    updateRegexText(i);
+    if (storeData.regexInput[i]) {
+      storeData.regexText[i] = [...storeData.text.matchAll(regexFromString(storeData.regexInput[i]))];
+      $(`#regex_text_${storeData.regexName[i]}`).val(storeData.regexText[i]);
+    }
+  }
+  if (!storeData.regexText[0].length) {
+    return;
+  }
+  toastr.info(`开始生成图片，共${storeData.regexText[0].length}张 ${storeData.regexText[0]}`);
+  for (let i = 0; i < storeData.regexText[0].length; i++) {
+    //更新内容
+
+    //取值保护
+    for (let j = 0; j < storeData.regexCount; j++) {
+      if (!storeData.regexText?.[j]?.[i]) {
+        storeData.regexText[j] = storeData.regexText[j] || [];
+        storeData.regexText[j][i] = '';
+      }
+    }
+    storeData.regexText[3] = storeData.regexText[3] || [];
+    storeData.regexText[3][i] = storeData.regexText?.[3]?.[i]?.trim() || randomItem(response);
+    //macros更新
+    for (let k = 0; k < storeData.regexCount; k++) {
+      if (storeData.regexText?.[k]?.[i]) {
+        macrosData[k] = storeData.regexText[k][i];
+      }
+    }
+    //生成图片
+    if (!storeData.regexText[1][i]&&!storeData.regexText[2][i]) {
+      return ;
+    }
+    const result = await generateImage(storeData.regexText[1][i], storeData.regexText[2][i]);
+    // 插入图片
+    let imageUrl = `<img src="${result}" title="${storeData.regexText[1][i]}"`;
+    for (let k = 1; k <= storeData.regexCount; k++) {
+      if (k === storeData.regexCount) {
+        imageUrl += `>`;
+        break
+      };
+      if (!storeData.regexText?.[k]?.[i]) continue;
+      imageUrl += ` ${storeData.regexName[k]}="${storeData.regexText[k][i]}"`;
+    }
+    const context = getContext();
+    const message = context.chat[context.chat.length - 1];
+    message.mes = message.mes.replace(storeData.regexText[0][i], imageUrl);
+    // 保存更新
+    updateMessageBlock(context.chat.length - 1, message,);
+    await eventSource.emit(event_types.MESSAGE_UPDATED, context.chat.length - 1,);
+    await context.saveChat();
+
+    toastr.info(`成功生成图片${i + 1}`);
+    i === storeData.regexText[0].length - 1 && toastr.info(`全部图片生成完成`);
+  }
+};
+
 
 //初始化
 jQuery(async () => {
@@ -105,130 +236,55 @@ jQuery(async () => {
   loadData();
   //触发条件
   eventSource.on(event_types.MESSAGE_UPDATED, getText);
-  eventSource.on(event_types.MESSAGE_RECEIVED, getText);
-  $('#get_text').on('click', function() {
+  eventSource.on(event_types.MESSAGE_RECEIVED, function () {
     getText();
-    //正文保存
-    storeData.text =$('#text').val();
-    saveSettingsDebounced();
+    processImages();
   });
-  // 正文处理
-  for (let i = 0; i < storeData.regexCount; i++) {
-    $(`#${storeData.regexName[i]}`).on('click', function() {
-        if (storeData.regexInput[i]) {
-        storeData.regexText[i] = [...storeData.text.matchAll(regexFromString(storeData.regexInput[i]))];
-        $(`#regex_text_${storeData.regexName[i]}`).val(storeData.regexText[i]);
-        }
-      });
-    }
+  
+  //同步监测
+  
   //添加正则
   $('#add_regex').on('click', function () {
-    storeData.regexCount++;
+    if (!$('#regex_name').val()) {
+      toastr.error('请输入名称');
+      return;
+    }
+    storeData.regexName.push($('#regex_name').val());
     const newRegex = $(`
     <div id="regex_model" class="flex-container">
-      <div id="start_regex" class="menu_button menu_button_icon interactable" data-i18n="[title]get_text" title="获取正文" tabindex="0"
+      <div id=${storeData.regexName[storeData.regexCount]} class="menu_button menu_button_icon interactable" data-i18n="[title]get_text" title="获取正文" tabindex="0"
       role="button">
-      提取
+      提取${storeData.regexName[storeData.regexCount]}
       </div>
-      <textarea id="regex_input${storeData.regexCount}" placeholder="输入正则" rows="2"></textarea>
-      <textarea id="regex_text${storeData.regexCount}" placeholder="提取文本" rows="2"></textarea>
+      <textarea id="regex_input_${storeData.regexName[storeData.regexCount]}" placeholder="输入正则" rows="2"></textarea>
+      <textarea id="regex_text_${storeData.regexName[storeData.regexCount]}" placeholder="提取文本" rows="2"></textarea>
     </div>`);
     newRegex.attr('id','regex' + storeData.regexCount);
-    $('#regex_container').append(newRegex);
+    $('#regex_container').append(newRegex); 
+    init(storeData.regexCount);
+    storeData.regexCount++;
+    saveSettingsDebounced();
   });
-  //删除正则
+  //删除正则}
   $('#delete_regex').on('click', function () {
-    storeData.regexCount--;
-    $('#regex_container').children().last().remove();
-  });
-  //恢复默认
-  $('#reset_defaults').on('click', function () {
-    Object.assign(extension_settings[extensionName], defaultSettings);
-    saveSettingsDebounced();
-    loadData();
-  });
-  //保存数据
-  $('#text').on('input', function () {
-    storeData.text = $(this).val();
-    saveSettingsDebounced();
-  }); 
-  for (let i = 0; i <storeData.regexCount; i++) {
-    $(`#regex_input_${storeData.regexName[i]}`).on('input', function () {
-      storeData.regexInput[i] = $(this).val();
-      saveSettingsDebounced();
-    }); 
-    $(`#regex_text_${storeData.regexName[i]}`).on('input', function () {
-      storeData.regexText[i] = $(this).val();
-      saveSettingsDebounced();
-    }); 
-  } 
-  //生成图片
-  $('#generate_image').on('click', async function () {
-    for (let i = 0; i < storeData.regexCount; i++) {
-        if (storeData.regexInput[i]) {
-        storeData.regexText[i] = [...storeData.text.matchAll(regexFromString(storeData.regexInput[i]))];
-        $(`#regex_text_${storeData.regexName[i]}`).val(storeData.regexText[i]);
-        }
-      }
-    toastr.info(`开始生成图片，共${storeData.regexText[0].length}张`);
-    for (let i = 0; i < storeData.regexText[0].length; i++) {
-      //取值保护
-      for (let j = 0; j < storeData.regexCount; j++) {
-        if (!storeData.regexText?.[j]?.[i]) {
-          storeData.regexText[j] = storeData.regexText[j] || [];
-          storeData.regexText[j][i] = '';
-        }
-      }
-      storeData.regexText[3] = storeData.regexText[3] || [];
-      storeData.regexText[3][i] = storeData.regexText?.[3]?.[i]?.trim() || randomItem(response);
-      //提示生成
-      toastr.info(`macros更新${i}`);
-      //macros更新
-      for (let k = 0; k < storeData.regexCount; k++) {
-        if (storeData.regexText?.[k]?.[i]) {
-        macrosData[k] = storeData.regexText[k][i];
-        }
-      }
-      //生成图片
-      const result = await generateImage(storeData.regexText[1][i], storeData.regexText[2][i]);
-      // 插入图片
-      const context = getContext();
-      const message = context.chat[context.chat.length - 1];
-      const imageUrl = `<img src="${result}" title="${storeData.regexText[1][i]}" prompt="${storeData.regexText[1][i]}">`;
-      message.mes = message.mes.replace(storeData.regexText[0][i], storeData.regexText[0][i] + imageUrl);
-      // 试验输出
-      console.log(randomItem(imageUrl));
-      // 保存更新
-      updateMessageBlock(context.chat.length - 1, message,);
-      await eventSource.emit(event_types.MESSAGE_UPDATED,context.chat.length - 1,);
-      await context.saveChat();
-
-      toastr.info(`成功生成图片${i + 1}`);
-      i === storeData.regexText[0].length-1 && toastr.info(`全部图片生成完成`);
+    if (storeData.regexCount <= 1) {
+      toastr.error('至少保留一个正则');
+      return;
     }
+    storeData.regexName.pop();
+    $('#regex_container').children().last().remove();
+    storeData.regexCount--;
+    saveSettingsDebounced();
+  });
+  
+  //生成图片
+  $('#generate_image').on('click', function () {
+    processImages();
   });
   //调试
   $('#debug').on('click', async function () {
-    console.log('1');
+  
   });
 });
-//声明macros
-for (let i = 0; i < storeData.regexCount; i++) {
-  MacrosParser.registerMacro(
-    storeData.regexName[i], () => macrosData[i], "获取" + storeData.regexName[i],
-  );
-}
-  
-//生成图片
-async function generateImage(prompt, negativePrompt) {
-  const result = await SlashCommandParser.commands['sd'].callback({
-    quiet: 'true',
-    negative: negativePrompt},
-    prompt,
-  );
-  return result;
-}
-//随机选择
-function randomItem(array) {
-  return array[Math.floor(Math.random() * array.length)];
-}
+
+
